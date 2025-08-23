@@ -41,8 +41,9 @@ class Wallet {
 
   async signMessage(message) {
     try {
-      const messageBytes = Buffer.from(message, 'utf-8');
-      const signature = await Secp256k1.createSignature(messageBytes, this.privateKey);
+      // 对消息进行哈希处理，确保长度不超过32字节
+      const messageHash = crypto.createHash('sha256').update(message, 'utf-8').digest();
+      const signature = await Secp256k1.createSignature(messageHash, this.privateKey);
       return toHex(signature.toFixedLength());
     } catch (error) {
       console.error('签名消息时出错:', error);
@@ -52,13 +53,14 @@ class Wallet {
 
   static async verifySignature(message, signature, publicKey) {
     try {
-      const messageBytes = Buffer.from(message, 'utf-8');
+      // 对消息进行哈希处理
+      const messageHash = crypto.createHash('sha256').update(message, 'utf-8').digest();
       const signatureBytes = fromHex(signature);
       const publicKeyBytes = fromHex(publicKey);
       
       return await Secp256k1.verifySignature(
         Secp256k1Signature.fromFixedLength(signatureBytes),
-        messageBytes,
+        messageHash,
         publicKeyBytes
       );
     } catch (error) {
