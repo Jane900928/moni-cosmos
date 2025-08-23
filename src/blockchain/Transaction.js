@@ -30,16 +30,27 @@ class Transaction {
     if (this.fromAddress === null) return; // 系统交易（如挖矿奖励）
     
     try {
-      // 计算消息哈希并转换为字节
-      const messageHash = this.calculateHash();
-      const msgHashBytes = Buffer.from(messageHash, 'hex');
+      // 创建要签名的消息内容
+      const messageContent = (this.fromAddress || '') +
+                            (this.toAddress || '') +
+                            this.amount +
+                            this.type +
+                            this.timestamp;
+      
+      // 对消息内容进行SHA-256哈希，得到32字节的哈希值
+      const messageHashBuffer = crypto
+        .createHash('sha256')
+        .update(messageContent)
+        .digest(); // 直接返回Buffer，不转换为hex
       
       // 确保私钥是字节格式
       const privateKeyBytes = typeof privateKey === 'string' ? fromHex(privateKey) : privateKey;
       
-      // 创建签名
-      const signature = await Secp256k1.createSignature(msgHashBytes, privateKeyBytes);
+      // 创建签名 - 现在messageHashBuffer正好是32字节
+      const signature = await Secp256k1.createSignature(messageHashBuffer, privateKeyBytes);
       this.signature = toHex(signature.toFixedLength());
+      
+      console.log(`交易签名成功，消息哈希长度: ${messageHashBuffer.length} 字节`);
     } catch (error) {
       console.error('签名交易时出错:', error);
       throw error;
@@ -54,9 +65,18 @@ class Transaction {
     }
 
     try {
-      // 计算消息哈希
-      const messageHash = this.calculateHash();
-      const msgHashBytes = Buffer.from(messageHash, 'hex');
+      // 重新创建签名时使用的消息内容
+      const messageContent = (this.fromAddress || '') +
+                            (this.toAddress || '') +
+                            this.amount +
+                            this.type +
+                            this.timestamp;
+      
+      // 对消息内容进行SHA-256哈希，得到32字节的哈希值
+      const messageHashBuffer = crypto
+        .createHash('sha256')
+        .update(messageContent)
+        .digest(); // 直接返回Buffer，不转换为hex
       
       // 解析签名和公钥
       const signatureBytes = fromHex(this.signature);
@@ -65,7 +85,7 @@ class Transaction {
       // 验证签名
       return await Secp256k1.verifySignature(
         Secp256k1.createSignature(signatureBytes),
-        msgHashBytes,
+        messageHashBuffer,
         publicKeyBytes
       );
     } catch (error) {
