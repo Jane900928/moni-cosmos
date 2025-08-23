@@ -7,7 +7,7 @@ class Transaction {
     this.fromAddress = fromAddress;
     this.toAddress = toAddress;
     this.amount = amount;
-    this.type = type; // 'transfer', 'mint', 'burn'
+    this.type = type; // 'transfer', 'mint', 'burn', 'mining_reward'
     this.timestamp = Date.now();
     this.signature = null;
     this.txId = this.calculateHash();
@@ -17,8 +17,8 @@ class Transaction {
     return crypto
       .createHash('sha256')
       .update(
-        this.fromAddress +
-        this.toAddress +
+        (this.fromAddress || '') +
+        (this.toAddress || '') +
         this.amount +
         this.type +
         this.timestamp
@@ -30,9 +30,15 @@ class Transaction {
     if (this.fromAddress === null) return; // 系统交易（如挖矿奖励）
     
     try {
-      const msgHash = Buffer.from(this.calculateHash(), 'hex');
-      const privateKeyBytes = fromHex(privateKey);
-      const signature = await Secp256k1.createSignature(msgHash, privateKeyBytes);
+      // 计算消息哈希并转换为字节
+      const messageHash = this.calculateHash();
+      const msgHashBytes = Buffer.from(messageHash, 'hex');
+      
+      // 确保私钥是字节格式
+      const privateKeyBytes = typeof privateKey === 'string' ? fromHex(privateKey) : privateKey;
+      
+      // 创建签名
+      const signature = await Secp256k1.createSignature(msgHashBytes, privateKeyBytes);
       this.signature = toHex(signature.toFixedLength());
     } catch (error) {
       console.error('签名交易时出错:', error);
@@ -48,13 +54,18 @@ class Transaction {
     }
 
     try {
-      const msgHash = Buffer.from(this.calculateHash(), 'hex');
+      // 计算消息哈希
+      const messageHash = this.calculateHash();
+      const msgHashBytes = Buffer.from(messageHash, 'hex');
+      
+      // 解析签名和公钥
       const signatureBytes = fromHex(this.signature);
       const publicKeyBytes = fromHex(this.fromAddress);
       
+      // 验证签名
       return await Secp256k1.verifySignature(
         Secp256k1.createSignature(signatureBytes),
-        msgHash,
+        msgHashBytes,
         publicKeyBytes
       );
     } catch (error) {
